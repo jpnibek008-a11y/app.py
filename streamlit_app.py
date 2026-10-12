@@ -332,3 +332,263 @@ elif bolim == "⚙️ Sozlamalar":
     st.write("Tanlangan personaj:", st.session_state.personaj)
 
     st.caption("JON AI — ishlab chiqilayotgan loyiha.")
+import streamlit as st
+
+st.set_page_config(
+    page_title="JON AI",
+    page_icon="💎",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+st.markdown("""
+<style>
+.stApp {
+    background:
+        radial-gradient(
+            circle at 50% 35%,
+            #10285c 0%,
+            #050816 65%
+        );
+    color: white;
+}
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+
+h1, h2, h3, p, label {
+    color: white !important;
+}
+
+.block-container {
+    padding-top: 1.5rem;
+    max-width: 1200px;
+}
+
+.logo {
+    color: #00cfff;
+    font-size: 38px;
+    font-weight: 900;
+    text-shadow: 0 0 20px #007bff;
+}
+
+.hero {
+    text-align: center;
+    padding: 25px 12px;
+    border: 1px solid #00cfff;
+    border-radius: 25px;
+    background: rgba(0, 40, 100, 0.30);
+    box-shadow: 0 0 25px rgba(0, 130, 255, 0.30);
+}
+
+.avatar {
+    font-size: 100px;
+    filter: drop-shadow(0 0 18px #008cff);
+}
+
+.stButton > button {
+    width: 100%;
+    min-height: 48px;
+    background: linear-gradient(90deg, #0066ff, #7928ca);
+    color: white;
+    border: 1px solid #00d9ff;
+    border-radius: 14px;
+}
+
+.stTextInput input,
+.stTextArea textarea {
+    background: #08152f;
+    color: white;
+    border: 1px solid #00cfff;
+    border-radius: 12px;
+}
+
+div[data-testid="stChatInput"] {
+    border: 1px solid #00cfff;
+    border-radius: 18px;
+}
+
+.feature {
+    background: rgba(10, 35, 75, 0.7);
+    border: 1px solid #0755a0;
+    border-radius: 16px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "personaj" not in st.session_state:
+    st.session_state.personaj = "JON AI"
+
+with st.container():
+    st.markdown("""
+    <div class="logo">💎 JON AI</div>
+    <p>Sizning aqlli yordamchingiz</p>
+    """, unsafe_allow_html=True)
+
+chap, ong = st.columns([3, 1])
+
+with ong:
+    st.markdown("🟢 Online")
+
+with chap:
+    st.markdown("""
+    <div class="hero">
+        <div class="avatar">🤖</div>
+        <h2>Salom! Men JON AI 👋</h2>
+        <p>Men sizning aqlli virtual yordamchingizman.</p>
+        <p>Sizga qanday yordam bera olaman?</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.write("")
+
+st.subheader("✨ Imkoniyatlar")
+
+c1, c2 = st.columns(2)
+
+with c1:
+    if st.button("💬 Savollarga javob"):
+        st.session_state.bolim = "Suhbat"
+
+    if st.button("✍️ Matn yozish"):
+        st.session_state.bolim = "Matn"
+
+    if st.button("🌐 Tarjima qilish"):
+        st.session_state.bolim = "Tarjima"
+
+with c2:
+    if st.button("💡 Maslahat berish"):
+        st.session_state.bolim = "Maslahat"
+
+    if st.button("🤖 Personaj tanlash"):
+        st.session_state.bolim = "Personaj"
+
+    if st.button("⚙️ Sozlamalar"):
+        st.session_state.bolim = "Sozlamalar"
+
+bolim = st.session_state.get("bolim", "Suhbat")
+
+st.divider()
+
+if bolim == "Personaj":
+    st.subheader("🤖 Personajni tanlang")
+
+    st.session_state.personaj = st.selectbox(
+        "Personaj",
+        [
+            "JON AI",
+            "Futuristik robot",
+            "Do‘stona yordamchi",
+            "Multfilm uslubi"
+        ]
+    )
+
+    surat = st.file_uploader(
+        "Surat yuklash",
+        type=["png", "jpg", "jpeg"]
+    )
+
+    if surat:
+        st.image(surat, use_container_width=True)
+
+elif bolim == "Matn":
+    st.subheader("✍️ Matn yozish")
+
+    mavzu = st.text_area("Qanday matn kerak?")
+
+    if st.button("Matnni tayyorlash"):
+        if mavzu.strip():
+            st.info(
+                "Mavzu qabul qilindi. "
+                "Matn yaratish uchun haqiqiy AI xizmatini ulash kerak."
+            )
+        else:
+            st.warning("Avval mavzuni yozing.")
+
+elif bolim == "Tarjima":
+    st.subheader("🌐 Tarjimon")
+
+    matn = st.text_area("Tarjima qilinadigan matn")
+
+    til = st.selectbox(
+        "Tarjima tili",
+        ["O‘zbekcha", "Inglizcha", "Ruscha", "Turkcha"]
+    )
+
+    if st.button("Tarjima qilish"):
+        if matn.strip():
+            st.info(
+                f"Matn qabul qilindi. Tanlangan til: {til}. "
+                "Tarjima uchun AI xizmatini ulash kerak."
+            )
+        else:
+            st.warning("Avval matn kiriting.")
+
+elif bolim == "Maslahat":
+    st.subheader("💡 Maslahatchi")
+
+    savol = st.text_area("Savolingizni yozing")
+
+    if st.button("Maslahat olish"):
+        if savol.strip():
+            st.info(
+                "Savolingiz qabul qilindi. "
+                "Haqiqiy javoblar uchun AI xizmatini ulaymiz."
+            )
+        else:
+            st.warning("Savolingizni kiriting.")
+
+elif bolim == "Sozlamalar":
+    st.subheader("⚙️ Sozlamalar")
+
+    ism = st.text_input("Ismingiz")
+    til = st.selectbox(
+        "Ilova tili",
+        ["O‘zbekcha", "English", "Русский"]
+    )
+
+    if st.button("Saqlash"):
+        st.session_state.ism = ism
+        st.session_state.til = til
+        st.success("Sozlamalar saqlandi.")
+
+else:
+    st.subheader("💬 JON AI bilan suhbat")
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    xabar = st.chat_input("Xabar yozing...")
+
+    if xabar:
+        st.session_state.messages.append({
+            "role": "user",
+            "content": xabar
+        })
+
+        with st.chat_message("user"):
+            st.write(xabar)
+
+        javob = (
+            "Salom! 💙 Men JON AI. "
+            "Hozircha interfeys tayyor. "
+            "Haqiqiy sun’iy intellekt javoblari uchun "
+            "AI xizmatini ulashimiz kerak."
+        )
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": javob
+        })
+
+        with st.chat_message("assistant"):
+            st.write(javob)
+
+st.caption("JON AI • Kelajak bilan muloqot")
