@@ -1,594 +1,328 @@
 import streamlit as st
+from google import genai
+from google.genai import types
 
+# -----------------------------
+# Page configuration
+# -----------------------------
 st.set_page_config(
     page_title="JON AI",
     page_icon="💎",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-st.markdown("""
-<style>
-.stApp {
-    background:
-        radial-gradient(
-            circle at top,
-            #10285c,
-            #050816 70%
-        );
-    color: white;
-}
+# -----------------------------
+# Styling
+# -----------------------------
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background: radial-gradient(circle at top, #10285c, #050816 70%);
+        color: white;
+    }
+    [data-testid="stSidebar"] {
+        background: #080f25;
+        border-right: 1px solid #00d9ff;
+    }
+    h1, h2, h3, p, label {
+        color: white !important;
+    }
+    .stButton > button {
+        width: 100%;
+        min-height: 45px;
+        color: white;
+        background: linear-gradient(90deg, #0066ff, #7928ca);
+        border: 1px solid #00d9ff;
+        border-radius: 14px;
+    }
+    .stTextInput input, .stTextArea textarea {
+        background: #0b1633;
+        color: white;
+        border: 1px solid #00d9ff;
+        border-radius: 12px;
+    }
+    .hero {
+        text-align: center;
+        padding: 28px 12px;
+        border: 1px solid #00d9ff;
+        border-radius: 24px;
+        background: rgba(0, 100, 255, 0.10);
+        box-shadow: 0 0 22px rgba(0, 180, 255, 0.20);
+    }
+    .robot { font-size: 85px; }
+    .card {
+        padding: 18px;
+        margin: 8px 0;
+        background: rgba(20, 40, 80, 0.55);
+        border: 1px solid #174b87;
+        border-radius: 16px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-[data-testid="stSidebar"] {
-    background: #080f25;
-    border-right: 1px solid #00d9ff;
-}
+# -----------------------------
+# Gemini setup
+# -----------------------------
+MODEL_NAME = "gemini-2.5-flash"
+SYSTEM_INSTRUCTION = (
+    "You are JON AI, a helpful, friendly personal assistant. "
+    "Respond in the same language as the user unless they request another language. "
+    "Be clear, accurate, and honest. Do not invent facts."
+)
 
-h1, h2, h3, p, label {
-    color: white !important;
-}
+@st.cache_resource
+def get_gemini_client(api_key: str):
+    return genai.Client(api_key=api_key)
 
-.stButton > button {
-    width: 100%;
-    min-height: 45px;
-    color: white;
-    background: linear-gradient(
-        90deg,
-        #0066ff,
-        #7928ca
-    );
-    border: 1px solid #00d9ff;
-    border-radius: 14px;
-}
+def get_api_key():
+    """Read the API key from Streamlit Cloud Secrets or a local .env-style environment."""
+    try:
+        key = st.secrets.get("GEMINI_API_KEY", "")
+    except Exception:
+        key = ""
+    return key or ""
 
-.stTextInput input,
-.stTextArea textarea {
-    background: #0b1633;
-    color: white;
-    border: 1px solid #00d9ff;
-    border-radius: 12px;
-}
+def ask_gemini(prompt: str, history=None, system_instruction=SYSTEM_INSTRUCTION) -> str:
+    api_key = get_api_key()
+    if not api_key:
+        raise RuntimeError(
+            "GEMINI_API_KEY topilmadi. Streamlit Cloud → Settings → Secrets "
+            "bo‘limiga GEMINI_API_KEY = \"API_KEYINGIZ\" qo‘shing."
+        )
 
-.hero {
-    text-align: center;
-    padding: 28px 12px;
-    border: 1px solid #00d9ff;
-    border-radius: 24px;
-    background: rgba(0, 100, 255, 0.10);
-    box-shadow: 0 0 22px rgba(0, 180, 255, 0.20);
-}
+    client = get_gemini_client(api_key)
+    contents = []
 
-.robot {
-    font-size: 85px;
-}
+    # Gemini history must use 'user' and 'model' roles.
+    for item in history or []:
+        role = "user" if item["role"] == "user" else "model"
+        contents.append(
+            types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=item["content"])],
+            )
+        )
 
-.card {
-    padding: 18px;
-    margin: 8px 0;
-    background: rgba(20, 40, 80, 0.55);
-    border: 1px solid #174b87;
-    border-radius: 16px;
-}
-</style>
-""", unsafe_allow_html=True)
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=prompt)],
+        )
+    )
 
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=0.7,
+            max_output_tokens=2048,
+        ),
+    )
+
+    answer = getattr(response, "text", None)
+    if not answer:
+        raise RuntimeError("Gemini javob qaytarmadi. Boshqa savol bilan urinib ko‘ring.")
+    return answer.strip()
+
+def show_ai_result(prompt: str, system_instruction: str, key: str):
+    if not prompt.strip():
+        st.warning("Iltimos, avval matn kiriting.")
+        return
+    with st.spinner("JON AI javob tayyorlamoqda..."):
+        try:
+            result = ask_gemini(prompt, system_instruction=system_instruction)
+            st.markdown(result)
+        except Exception as exc:
+            st.error(f"AI so‘rovi bajarilmadi: {exc}")
+
+# -----------------------------
+# Session state
+# -----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
 if "personaj" not in st.session_state:
     st.session_state.personaj = "JON AI"
+if "bolim" not in st.session_state:
+    st.session_state.bolim = "💬 AI bilan suhbat"
+if "ism" not in st.session_state:
+    st.session_state.ism = ""
+if "til" not in st.session_state:
+    st.session_state.til = "O‘zbekcha"
 
+# -----------------------------
+# Sidebar navigation
+# -----------------------------
 st.sidebar.markdown("# 💎 JON AI")
 st.sidebar.caption("Sizning virtual yordamchingiz")
 
-bolim = st.sidebar.radio(
+menu_items = [
+    "🏠 Bosh sahifa",
+    "💬 AI bilan suhbat",
+    "🤖 Personaj",
+    "✍️ Matn yozish",
+    "🌐 Tarjimon",
+    "💡 Maslahatlar",
+    "⚙️ Sozlamalar",
+]
+selected = st.sidebar.radio(
     "MENYU",
-    [
-        "🏠 Bosh sahifa",
-        "💬 AI bilan suhbat",
-        "🤖 Personaj",
-        "✍️ Matn yozish",
-        "🌐 Tarjimon",
-        "💡 Maslahatlar",
-        "⚙️ Sozlamalar"
-    ]
+    menu_items,
+    index=menu_items.index(st.session_state.bolim)
+    if st.session_state.bolim in menu_items else 1,
 )
+st.session_state.bolim = selected
 
 if st.sidebar.button("🗑️ Suhbatni tozalash"):
     st.session_state.messages = []
     st.rerun()
 
-if bolim == "🏠 Bosh sahifa":
+with st.sidebar.expander("API holati"):
+    if get_api_key():
+        st.success("Gemini API kaliti topildi.")
+    else:
+        st.warning("GEMINI_API_KEY sozlanmagan.")
 
+# -----------------------------
+# Home
+# -----------------------------
+if selected == "🏠 Bosh sahifa":
     st.title("💎 JON AI")
     st.caption("Kelajak bilan muloqot")
-
-    st.markdown("""
-    <div class="hero">
-        <div class="robot">🤖</div>
-        <h2>Salom! Men JON AI</h2>
-        <p>Sizning shaxsiy virtual yordamchingiz.</p>
-        <p>Yangi g‘oyalar. Yangi imkoniyatlar. Yangi olam.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown(
+        """
+        <div class="hero">
+            <div class="robot">🤖</div>
+            <h2>Salom! Men JON AI</h2>
+            <p>Sizning shaxsiy virtual yordamchingiz.</p>
+            <p>Yangi g‘oyalar. Yangi imkoniyatlar. Yangi olam.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.write("")
     st.subheader("✨ Imkoniyatlar")
-
     col1, col2 = st.columns(2)
-
     with col1:
-        st.markdown("""
-        <div class="card">
-        <h3>💬 Suhbat</h3>
-        <p>Savollaringizni yozing.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-        <div class="card">
-        <h3>✍️ Matn yozish</h3>
-        <p>She’r, hikoya va matnlar.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown('<div class="card"><h3>💬 Suhbat</h3><p>Savollaringizga AI javob beradi.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><h3>✍️ Matn yozish</h3><p>She’r, hikoya, insho va rasmiy xatlar.</p></div>', unsafe_allow_html=True)
     with col2:
-        st.markdown("""
-        <div class="card">
-        <h3>🤖 Personaj</h3>
-        <p>O‘zingizga mos personaj tanlang.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown('<div class="card"><h3>🤖 Personaj</h3><p>Yordamchi ko‘rinishini tanlang.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card"><h3>🌐 Tarjima</h3><p>Matnlarni turli tillarga tarjima qiling.</p></div>', unsafe_allow_html=True)
+    st.info("Boshlash uchun chap tomondagi menyudan kerakli bo‘limni tanlang.")
 
-        st.markdown("""
-        <div class="card">
-        <h3>🌐 Tarjima</h3>
-        <p>Turli tillardagi matnlar.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.info(
-        "Boshlash uchun chap tomondagi menyudan "
-        "kerakli bo‘limni tanlang."
-    )
-
-elif bolim == "💬 AI bilan suhbat":
-
+# -----------------------------
+# Chat
+# -----------------------------
+elif selected == "💬 AI bilan suhbat":
     st.title("💬 JON AI bilan suhbat")
-    st.caption("Suhbat oynasi")
+    st.caption("Gemini orqali ishlaydi")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
+            st.markdown(message["content"])
 
     xabar = st.chat_input("Xabaringizni yozing...")
-
     if xabar:
-        st.session_state.messages.append({
-            "role": "user",
-            "content": xabar
-        })
-
+        st.session_state.messages.append({"role": "user", "content": xabar})
         with st.chat_message("user"):
-            st.write(xabar)
-
-        javob = (
-            "Xabaringiz qabul qilindi! "
-            "Haqiqiy AI javoblarini olish uchun "
-            "keyingi bosqichda AI API xizmatini ulaymiz."
-        )
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": javob
-        })
+            st.markdown(xabar)
 
         with st.chat_message("assistant"):
-            st.write(javob)
+            with st.spinner("JON AI o‘ylayapti..."):
+                try:
+                    # Send previous messages except the just-added latest user message.
+                    history = st.session_state.messages[:-1]
+                    javob = ask_gemini(xabar, history=history)
+                    st.markdown(javob)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": javob}
+                    )
+                except Exception as exc:
+                    st.error(f"AI so‘rovi bajarilmadi: {exc}")
 
-elif bolim == "🤖 Personaj":
-
+# -----------------------------
+# Character
+# -----------------------------
+elif selected == "🤖 Personaj":
     st.title("🤖 Personajni sozlash")
-
-    personaj = st.selectbox(
+    st.session_state.personaj = st.selectbox(
         "Personajni tanlang",
-        [
-            "JON AI",
-            "Futuristik robot",
-            "Do‘stona yordamchi",
-            "Multfilm personaji"
-        ]
+        ["JON AI", "Futuristik robot", "Do‘stona yordamchi", "Multfilm personaji"],
+        index=["JON AI", "Futuristik robot", "Do‘stona yordamchi", "Multfilm personaji"].index(
+            st.session_state.personaj
+        ) if st.session_state.personaj in ["JON AI", "Futuristik robot", "Do‘stona yordamchi", "Multfilm personaji"] else 0,
     )
-
-    st.session_state.personaj = personaj
-
     st.markdown(
-        f'<div class="hero">'
-        f'<div class="robot">🤖</div>'
-        f'<h2>{personaj}</h2>'
-        f'<p>Siz tanlagan virtual personaj</p>'
-        f'</div>',
-        unsafe_allow_html=True
+        f'<div class="hero"><div class="robot">🤖</div><h2>{st.session_state.personaj}</h2>'
+        '<p>Siz tanlagan virtual personaj</p></div>',
+        unsafe_allow_html=True,
     )
-
-    surat = st.file_uploader(
-        "O‘z rasmingizni yuklang",
-        type=["png", "jpg", "jpeg"]
-    )
-
+    surat = st.file_uploader("O‘z rasmingizni yuklang", type=["png", "jpg", "jpeg"])
     if surat:
-        st.image(
-            surat,
-            caption="Tanlangan rasm",
-            use_container_width=True
-        )
+        st.image(surat, caption="Tanlangan rasm", use_container_width=True)
+        st.caption("Rasm ko‘rsatiladi; uni o‘zgartirish yoki yangi rasm yaratish alohida xizmatni talab qiladi.")
 
-        st.info(
-            "Rasm yuklandi. Uni haqiqiy AI personajiga "
-            "aylantirish uchun alohida rasm yaratish "
-            "xizmati kerak bo‘ladi."
-        )
-
-elif bolim == "✍️ Matn yozish":
-
+# -----------------------------
+# Writing assistant
+# -----------------------------
+elif selected == "✍️ Matn yozish":
     st.title("✍️ Matn yozish yordamchisi")
-
-    mavzu = st.text_input(
-        "Nima haqida matn kerak?"
-    )
-
-    tur = st.selectbox(
-        "Matn turi",
-        [
-            "She’r",
-            "Hikoya",
-            "Insho",
-            "Tabrik",
-            "Rasmiy xat",
-            "Boshqa"
-        ]
-    )
-
+    mavzu = st.text_area("Nima haqida matn kerak?")
+    tur = st.selectbox("Matn turi", ["She’r", "Hikoya", "Insho", "Tabrik", "Rasmiy xat", "Boshqa"])
+    uslub = st.selectbox("Uslub", ["Oddiy va tushunarli", "Rasmiy", "Ijodiy", "Batafsil"])
     if st.button("Matn tayyorlash"):
-        if mavzu.strip():
-            st.info(
-                "Tanlangan tur: " + tur +
-                "\n\nMavzu: " + mavzu +
-                "\n\nHaqiqiy matn yaratish uchun "
-                "AI xizmatini ulash keyingi bosqichda "
-                "amalga oshiriladi."
-            )
-        else:
-            st.warning("Avval mavzuni kiriting.")
+        prompt = f"Mavzu: {mavzu}\nMatn turi: {tur}\nUslub: {uslub}\nMatnni tayyorlab ber."
+        show_ai_result(
+            prompt,
+            "You are a skilled writing assistant. Write the requested text in the user's language. Follow the requested type and style.",
+            "writing",
+        )
 
-elif bolim == "🌐 Tarjimon":
-
+# -----------------------------
+# Translator
+# -----------------------------
+elif selected == "🌐 Tarjimon":
     st.title("🌐 Tarjimon")
-
-    matn = st.text_area(
-        "Tarjima qilinadigan matnni kiriting"
-    )
-
-    til = st.selectbox(
-        "Qaysi tilga tarjima qilinsin?",
-        [
-            "O‘zbek tili",
-            "Ingliz tili",
-            "Rus tili",
-            "Turk tili",
-            "Arab tili"
-        ]
-    )
-
+    matn = st.text_area("Tarjima qilinadigan matnni kiriting")
+    til = st.selectbox("Qaysi tilga tarjima qilinsin?", ["O‘zbek tili", "Ingliz tili", "Rus tili", "Turk tili", "Arab tili"])
     if st.button("Tarjima qilish"):
-        if matn.strip():
-            st.info(
-                "Matn qabul qilindi. "
-                "Tarjima natijasini olish uchun "
-                "AI xizmatini ulashimiz kerak."
-            )
-        else:
-            st.warning("Avval matn kiriting.")
+        prompt = f"Translate the following text into {til}. Preserve the meaning and tone. Return only the translation unless a brief clarification is essential.\n\nText:\n{matn}"
+        show_ai_result(
+            prompt,
+            "You are a professional multilingual translator. Preserve meaning, tone, names, and formatting. Do not summarize.",
+            "translation",
+        )
 
-elif bolim == "💡 Maslahatlar":
-
+# -----------------------------
+# Advice
+# -----------------------------
+elif selected == "💡 Maslahatlar":
     st.title("💡 JON AI maslahatchi")
-
-    savol = st.text_area(
-        "Qanday masala bo‘yicha maslahat kerak?"
-    )
-
+    savol = st.text_area("Qanday masala bo‘yicha maslahat kerak?")
     if st.button("Maslahat olish"):
-        if savol.strip():
-            st.info(
-                "Savolingiz qabul qilindi. "
-                "Shaxsiylashtirilgan javoblar uchun "
-                "keyingi bosqichda AI xizmatini ulaymiz."
-            )
-        else:
-            st.warning("Savolingizni kiriting.")
+        show_ai_result(
+            savol,
+            "You are a thoughtful, practical personal assistant. Give balanced, actionable advice. If a topic is high-stakes, clearly state limitations and encourage qualified professional help when appropriate.",
+            "advice",
+        )
 
-elif bolim == "⚙️ Sozlamalar":
-
+# -----------------------------
+# Settings
+# -----------------------------
+elif selected == "⚙️ Sozlamalar":
     st.title("⚙️ Sozlamalar")
-
-    st.write("JON AI ilovasini sozlang.")
-
-    ism = st.text_input(
-        "Ismingiz",
-        placeholder="Ismingizni kiriting"
-    )
-
-    til = st.selectbox(
-        "Ilova tili",
-        ["O‘zbekcha", "English", "Русский"]
-    )
-
+    ism = st.text_input("Ismingiz", value=st.session_state.ism, placeholder="Ismingizni kiriting")
+    til = st.selectbox("Ilova tili", ["O‘zbekcha", "English", "Русский"], index=["O‘zbekcha", "English", "Русский"].index(st.session_state.til))
     if st.button("Sozlamalarni saqlash"):
         st.session_state.ism = ism
         st.session_state.til = til
         st.success("Sozlamalar saqlandi!")
-
     st.write("Tanlangan personaj:", st.session_state.personaj)
-
-    st.caption("JON AI — ishlab chiqilayotgan loyiha.")
-import streamlit as st
-
-st.set_page_config(
-    page_title="JON AI",
-    page_icon="💎",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-st.markdown("""
-<style>
-.stApp {
-    background:
-        radial-gradient(
-            circle at 50% 35%,
-            #10285c 0%,
-            #050816 65%
-        );
-    color: white;
-}
-
-header[data-testid="stHeader"] {
-    background: transparent;
-}
-
-h1, h2, h3, p, label {
-    color: white !important;
-}
-
-.block-container {
-    padding-top: 1.5rem;
-    max-width: 1200px;
-}
-
-.logo {
-    color: #00cfff;
-    font-size: 38px;
-    font-weight: 900;
-    text-shadow: 0 0 20px #007bff;
-}
-
-.hero {
-    text-align: center;
-    padding: 25px 12px;
-    border: 1px solid #00cfff;
-    border-radius: 25px;
-    background: rgba(0, 40, 100, 0.30);
-    box-shadow: 0 0 25px rgba(0, 130, 255, 0.30);
-}
-
-.avatar {
-    font-size: 100px;
-    filter: drop-shadow(0 0 18px #008cff);
-}
-
-.stButton > button {
-    width: 100%;
-    min-height: 48px;
-    background: linear-gradient(90deg, #0066ff, #7928ca);
-    color: white;
-    border: 1px solid #00d9ff;
-    border-radius: 14px;
-}
-
-.stTextInput input,
-.stTextArea textarea {
-    background: #08152f;
-    color: white;
-    border: 1px solid #00cfff;
-    border-radius: 12px;
-}
-
-div[data-testid="stChatInput"] {
-    border: 1px solid #00cfff;
-    border-radius: 18px;
-}
-
-.feature {
-    background: rgba(10, 35, 75, 0.7);
-    border: 1px solid #0755a0;
-    border-radius: 16px;
-    padding: 15px;
-    margin-bottom: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "personaj" not in st.session_state:
-    st.session_state.personaj = "JON AI"
-
-with st.container():
-    st.markdown("""
-    <div class="logo">💎 JON AI</div>
-    <p>Sizning aqlli yordamchingiz</p>
-    """, unsafe_allow_html=True)
-
-chap, ong = st.columns([3, 1])
-
-with ong:
-    st.markdown("🟢 Online")
-
-with chap:
-    st.markdown("""
-    <div class="hero">
-        <div class="avatar">🤖</div>
-        <h2>Salom! Men JON AI 👋</h2>
-        <p>Men sizning aqlli virtual yordamchingizman.</p>
-        <p>Sizga qanday yordam bera olaman?</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("")
-
-st.subheader("✨ Imkoniyatlar")
-
-c1, c2 = st.columns(2)
-
-with c1:
-    if st.button("💬 Savollarga javob"):
-        st.session_state.bolim = "Suhbat"
-
-    if st.button("✍️ Matn yozish"):
-        st.session_state.bolim = "Matn"
-
-    if st.button("🌐 Tarjima qilish"):
-        st.session_state.bolim = "Tarjima"
-
-with c2:
-    if st.button("💡 Maslahat berish"):
-        st.session_state.bolim = "Maslahat"
-
-    if st.button("🤖 Personaj tanlash"):
-        st.session_state.bolim = "Personaj"
-
-    if st.button("⚙️ Sozlamalar"):
-        st.session_state.bolim = "Sozlamalar"
-
-bolim = st.session_state.get("bolim", "Suhbat")
-
-st.divider()
-
-if bolim == "Personaj":
-    st.subheader("🤖 Personajni tanlang")
-
-    st.session_state.personaj = st.selectbox(
-        "Personaj",
-        [
-            "JON AI",
-            "Futuristik robot",
-            "Do‘stona yordamchi",
-            "Multfilm uslubi"
-        ]
-    )
-
-    surat = st.file_uploader(
-        "Surat yuklash",
-        type=["png", "jpg", "jpeg"]
-    )
-
-    if surat:
-        st.image(surat, use_container_width=True)
-
-elif bolim == "Matn":
-    st.subheader("✍️ Matn yozish")
-
-    mavzu = st.text_area("Qanday matn kerak?")
-
-    if st.button("Matnni tayyorlash"):
-        if mavzu.strip():
-            st.info(
-                "Mavzu qabul qilindi. "
-                "Matn yaratish uchun haqiqiy AI xizmatini ulash kerak."
-            )
-        else:
-            st.warning("Avval mavzuni yozing.")
-
-elif bolim == "Tarjima":
-    st.subheader("🌐 Tarjimon")
-
-    matn = st.text_area("Tarjima qilinadigan matn")
-
-    til = st.selectbox(
-        "Tarjima tili",
-        ["O‘zbekcha", "Inglizcha", "Ruscha", "Turkcha"]
-    )
-
-    if st.button("Tarjima qilish"):
-        if matn.strip():
-            st.info(
-                f"Matn qabul qilindi. Tanlangan til: {til}. "
-                "Tarjima uchun AI xizmatini ulash kerak."
-            )
-        else:
-            st.warning("Avval matn kiriting.")
-
-elif bolim == "Maslahat":
-    st.subheader("💡 Maslahatchi")
-
-    savol = st.text_area("Savolingizni yozing")
-
-    if st.button("Maslahat olish"):
-        if savol.strip():
-            st.info(
-                "Savolingiz qabul qilindi. "
-                "Haqiqiy javoblar uchun AI xizmatini ulaymiz."
-            )
-        else:
-            st.warning("Savolingizni kiriting.")
-
-elif bolim == "Sozlamalar":
-    st.subheader("⚙️ Sozlamalar")
-
-    ism = st.text_input("Ismingiz")
-    til = st.selectbox(
-        "Ilova tili",
-        ["O‘zbekcha", "English", "Русский"]
-    )
-
-    if st.button("Saqlash"):
-        st.session_state.ism = ism
-        st.session_state.til = til
-        st.success("Sozlamalar saqlandi.")
-
-else:
-    st.subheader("💬 JON AI bilan suhbat")
-
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-
-    xabar = st.chat_input("Xabar yozing...")
-
-    if xabar:
-        st.session_state.messages.append({
-            "role": "user",
-            "content": xabar
-        })
-
-        with st.chat_message("user"):
-            st.write(xabar)
-
-        javob = (
-            "Salom! 💙 Men JON AI. "
-            "Hozircha interfeys tayyor. "
-            "Haqiqiy sun’iy intellekt javoblari uchun "
-            "AI xizmatini ulashimiz kerak."
-        )
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": javob
-        })
-
-        with st.chat_message("assistant"):
-            st.write(javob)
+    st.caption("JON AI • Gemini API bilan ishlaydi")
 
 st.caption("JON AI • Kelajak bilan muloqot")
